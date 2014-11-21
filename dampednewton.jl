@@ -11,23 +11,22 @@ function jacobian(f, x)
   return J;
 end
 
-function levmar_dif(f, x0, kmax, opts)
-  return levmar_der(f, jacobian, x0, kmax, opts);
+function damped_newton_dif(f, x0, kmax, opts)
+  return damped_newton_der(f, jacobian, x0, kmax, opts);
 end
 
-function levmar_der(f, jac, x0, kmax, opts)
+function damped_newton_der(f, jac, x0, kmax, opts)
   k = 0;
   nv = 2;
   x = x0;
   n = length(x);
   m = length(f(x));
 
-  eps1 = opts[1]; eps2 = opts[2]; eps3 = opts[3]; tau = opts[4];
+  eps1 = opts[1]; eps2 = opts[2]; eps3 = opts[3]; mu = opts[4];
 
   J = jac(f, x);
   A = J'*J; g = vec(J' * f(x));
   found = norm(g, Inf) <= eps1;
-  mu = tau * maximum(diag(A));
 
   function F(x)
     return 0.5 * dot(f(x), f(x));
@@ -37,27 +36,15 @@ function levmar_der(f, jac, x0, kmax, opts)
   while !found && k < kmax
     k += 1;
     h = vec((A + mu * eye(n, n)) \ (-g));
-
-    if norm(h) <= eps2*(norm(x) + eps2)
-      println("h too small");
-      found = true
-    else
-      xnew = x + h;
-      D = 0.5 * dot(h, mu*h-g);
-      rho = (F(x) - F(xnew))/D;
-      if rho > 0
-        x = xnew;
-        J = jac(f, x);
-        A = J'*J; g = vec(J'*f(x));
-        found = (norm(g, Inf) <= eps1) || (F(x) <= eps3);
-        if found
-          println("g too small");
-        end
-        mu = mu * max(1/3, 1 - (2*rho-1)^3);
-        nu = 2;
-      else
-        mu = mu * nv; nv *= 2;
-      end
+    xnew = x + h;
+    Fold = F(x);
+    x = xnew;
+    Fnew = F(x);
+    J = jac(f, x);
+    A = J'*J; g = vec(J'*f(x));
+    found = (norm(g, Inf) <= eps1) || (F(x) <= eps3) || (abs(Fold-Fnew)<eps2);
+    if found
+      println("g too small");
     end
   end
 
@@ -102,7 +89,7 @@ function jac_meyer(f, x)
   return J;
 end
 
-println(levmar_dif(myequ, [0.5, 0.5], 100, [1e-12, 1e-12, 1e-17, 1e-3]))
-println(levmar_dif(myequ2, [0.5, 0.5], 100, [1e-8, 1e-8, 1e-17, 1e-3]))
-println(levmar_dif(meyer, [8.85, 4.0, 2.5], 1000, [1e-12, 1e-12, 1e-12, 1e-3]))
-println(levmar_der(meyer, jac_meyer, [8.85, 4.0, 2.5], 1000, [1e-12, 1e-12, 1e-12, 1e-3]))
+println(damped_newton_dif(myequ, [0.5, 0.5], 1000, [1e-12, 1e-12, 1e-17, 1e-6]))
+println(damped_newton_dif(myequ2, [0.5, 0.5], 1000, [1e-8, 1e-8, 1e-17, 1e-6]))
+println(damped_newton_dif(meyer, [8.85, 4.0, 2.5], 5000, [1e-12, 1e-12, 1e-12, 1e-6]))
+println(damped_newton_der(meyer, jac_meyer, [8.85, 4.0, 2.5], 5000, [1e-12, 1e-12, 1e-12, 1e-6]))
